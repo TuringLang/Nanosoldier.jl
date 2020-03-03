@@ -237,7 +237,7 @@ function Base.run(job::BenchmarkJob)
     nodelog(cfg, node, "completed $(summary(job))")
 end
 
-function execute_benchmarks!(job::BenchmarkJob, whichbuild::Symbol)
+function _execute_benchmarks!(job::BenchmarkJob, whichbuild::Symbol)
     node = myid()
     cfg = submission(job).config
     build = whichbuild == :against ? job.against : submission(job).build
@@ -433,6 +433,104 @@ function execute_benchmarks!(job::BenchmarkJob, whichbuild::Symbol)
 
     return results
 end
+
+
+function clone_turing!(config::Config, build::BuildRef, logpath, prnumber::Union{Int,Nothing}=nothing)
+    # make a temporary workdir for our build
+    builddir = mktempdir(workdir(config))
+    cd(workdir(config))
+
+    if prnumber !== nothing
+        # clone from `trackrepo`, not `build.repo`, since that's where the merge commit is
+        gitclone!(config.trackrepo, builddir)
+        cd(builddir)
+        try
+            run(`git fetch --quiet origin +refs/pull/$(prnumber)/merge:`)
+        catch
+            # if there's not a merge commit on the remote (likely due to
+            # merge conflicts) then fetch the head commit instead.
+            run(`git fetch --quiet origin +refs/pull/$(prnumber)/head:`)
+        end
+        run(`git checkout --quiet --force FETCH_HEAD`)
+        build.sha = readchomp(`git rev-parse HEAD`)
+    else
+        gitclone!(build.repo, builddir)
+        cd(builddir)
+        run(`git checkout --quiet $(build.sha)`)
+    end
+
+    cd(workdir(config))
+    return builddir
+end
+
+
+function execute_benchmarks!(job::BenchmarkJob, whichbuild::Symbol)
+    node = myid()
+    cfg = submission(job).config
+    build = whichbuild == :against ? job.against : submission(job).build
+
+    nodelog(cfg, node, "...cloning Turing...")
+    if whichbuild == :primary && submission(job).fromkind == :pr
+        builddir = clone_turing!(cfg, build, tmplogdir(job), submission(job).prnumber)
+    else
+        builddir = clone_turing!(cfg, build, tmplogdir(job))
+    end
+
+    juliapath = ENV["_"]
+    delete!(ENV, "JULIA_PROJECT")
+
+    nodelog(cfg, node, "...setting up benchmark scripts/environment...")
+
+    cd(builddir)
+
+    benchname = string(build.sha, "_", whichbuild)
+    benchout = joinpath(tmplogdir(job), string(benchname, ".out"))
+    bencherr = joinpath(tmplogdir(job), string(benchname, ".err"))
+    benchresults = joinpath(tmpdatadir(job), string(benchname, ".json"))
+
+    code = """
+    using Pkg;
+    pkg"instantiate; add JSON GitHub DataFrames BenchmarkTools;"
+    Pkg.build(verbose=true)
+    push!(LOAD_PATH, joinpath(".", "benchmarks"))
+    using BenchmarkTools
+    using BenchmarkHelper
+    BenchmarkHelper.set_benchmark_info("$(benchname)", "$(benchname)")
+    for bm in BenchmarkHelper.benchmark_files()
+        include(joinpath("benchmarks", bm))
+    end
+
+    benchmarks = BenchmarkHelper.BenchmarkSuite[@tagged($(job.tagpred))]
+    println("WARMING UP BENCHMARKS...")
+    warmup(benchmarks)
+
+    println("RUNNING BENCHMARKS...")
+    results = run(benchmarks; verbose=true)
+
+    println("SAVING RESULT...")
+    BenchmarkTools.save("$(benchresults)", results)
+
+    println("DONE!")
+
+    """
+    # execute our script as the server user on the shielded CPU
+    nodelog(cfg, node, "...executing benchmarks...")
+    run(`$juliapath --project -e $code`)
+
+    results = BenchmarkTools.load(benchresults)[1]
+
+    # Get the verbose output of versioninfo for the build, throwing away
+    # environment information that is useless/potentially risky to expose.
+    build.vinfo = build.sha
+
+    cd(workdir(cfg))
+
+    # delete the builddir now that we're done with it
+    rm(builddir, recursive=true)
+
+    return results
+end
+
 
 ##########################
 # BenchmarkJob Reporting #
