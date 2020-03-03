@@ -13,8 +13,8 @@ secret = get(ENV,"GITHUB_SECRET", "none")
 
 config = Nanosoldier.Config(ENV["USER"], nodes, auth, secret;
                             workdir = joinpath(homedir(), "test_workdir"),
-                            trackrepo = "KDr2/Turing.jl",
-                            reportrepo = "KDr2/BenchmarkReports",
+                            trackrepo = "TuringLang/Turing.jl",
+                            reportrepo = "TuringLang/BenchmarkReports.git",
 			                trigger =  r"\@BayesBot\s*`runbenchmarks\(.*?\)`",
 			                admin = "KDr2",
                             testmode = true)
