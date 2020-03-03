@@ -15,7 +15,9 @@ snip(str, len) = str[1:min(len, end)]
 snipsha(sha) = snip(sha, 7)
 
 function gitclone!(repo, path, auth=nothing)
-    if isa(auth, GitHub.OAuth2)
+    if auth == :public
+        run(`git clone https://github.com/$(repo).git $(path)`)
+    elseif isa(auth, GitHub.OAuth2)
         run(`git clone https://$(auth.token):x-oauth-basic@github.com/$(repo).git $(path)`)
     elseif isa(auth, GitHub.UsernamePassAuth)
         run(`git clone https://$(auth.username):$(auth.password)@github.com/$(repo).git $(path)`)

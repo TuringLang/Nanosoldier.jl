@@ -442,7 +442,7 @@ function clone_turing!(config::Config, build::BuildRef, logpath, prnumber::Union
 
     if prnumber !== nothing
         # clone from `trackrepo`, not `build.repo`, since that's where the merge commit is
-        gitclone!(config.trackrepo, builddir)
+        gitclone!(config.trackrepo, builddir, :public)
         cd(builddir)
         try
             run(`git fetch --quiet origin +refs/pull/$(prnumber)/merge:`)
@@ -454,7 +454,7 @@ function clone_turing!(config::Config, build::BuildRef, logpath, prnumber::Union
         run(`git checkout --quiet --force FETCH_HEAD`)
         build.sha = readchomp(`git rev-parse HEAD`)
     else
-        gitclone!(build.repo, builddir)
+        gitclone!(build.repo, builddir, :public)
         cd(builddir)
         run(`git checkout --quiet $(build.sha)`)
     end

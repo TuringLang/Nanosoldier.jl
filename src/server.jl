@@ -1,6 +1,7 @@
 struct Server
     config::Config
     jobs::Vector{AbstractJob}
+    handle
     listener::GitHub.CommentListener
 
     function Server(config::Config)
@@ -44,7 +45,7 @@ struct Server
                                           auth = config.auth,
                                           secret = config.secret,
                                           repos = [config.trackrepo])
-        return new(config, jobs, listener)
+        return new(config, jobs, handle, listener)
     end
 end
 
@@ -78,6 +79,39 @@ function Base.run(server::Server, args...; kwargs...)
         end
     end
     return run(server.listener, args...; kwargs...)
+end
+
+
+function run_as_github_action(server::Server)
+    @assert myid() == 1 "Nanosoldier server must be run from the master node"
+
+    # Get event from event file
+    EVENT_FILE = get(ENV, "GITHUB_EVENT_PATH", "")
+    if isempty(EVENT_FILE)
+        @error "No github event file specified."
+        return
+    end
+
+    EVENT_DATA = JSON.Parser.parsefile(EVENT_FILE)
+    @debug EVENT_DATA
+
+    if !haskey(EVENT_DATA, "comment")
+        @error "No corect github event file specified."
+        return
+    end
+
+    comment_body = EVENT_DATA["comment"]["body"]
+    phrase = match(server.config.trigger, comment_body)
+    phrase == nothing && return
+    event = GitHub.event_from_payload!("issue_comment", EVENT_DATA)
+
+    # setup(server.config, server.jobs)
+    persistdir!(server.config)
+    server.handle(event, phrase)
+    job = retrieve_job!(server.jobs, Any, true)
+    if job !== nothing
+        run(job)
+    end
 end
 
 function retrieve_job!(jobs, job_type::Type, accept_daily::Bool)
