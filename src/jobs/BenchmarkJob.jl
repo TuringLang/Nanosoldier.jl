@@ -128,7 +128,9 @@ function jobdirname(job::BenchmarkJob)
     end
 end
 
-reportdir(job::BenchmarkJob) = joinpath(reportdir(submission(job).config), "benchmark", jobdirname(job))
+# dir fix, see function report below in this file
+# reportdir(job::BenchmarkJob) = joinpath(reportdir(submission(job).config), "benchmark", jobdirname(job))
+reportdir(job::BenchmarkJob) = joinpath(reportdir(submission(job).config), jobdirname(job))
 tmpdir(job::BenchmarkJob) = joinpath(workdir(submission(job).config), "tmpresults")
 tmplogdir(job::BenchmarkJob) = joinpath(tmpdir(job), "logs")
 tmpdatadir(job::BenchmarkJob) = joinpath(tmpdir(job), "data")

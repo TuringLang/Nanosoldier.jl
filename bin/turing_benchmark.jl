@@ -15,8 +15,8 @@ config = Nanosoldier.Config(ENV["USER"], nodes, auth, secret;
                             workdir = joinpath(homedir(), "test_workdir"),
                             trackrepo = "TuringLang/Turing.jl",
                             reportrepo = "TuringLang/BenchmarkReports",
-			                trigger =  r"\@BayesBot\s*`runbenchmarks\(.*?\)`",
-			                admin = "KDr2",
+                            trigger =  r"\@BayesBot\s*`runbenchmarks\(.*?\)`",
+                            admin = "BayesBot",
                             testmode = true)
 
 server = Nanosoldier.Server(config)
