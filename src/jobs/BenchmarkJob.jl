@@ -497,7 +497,6 @@ function execute_benchmarks!(job::BenchmarkJob, whichbuild::Symbol)
     push!(LOAD_PATH, joinpath(".", "benchmarks"))
     using BenchmarkTools
     using BenchmarkHelper
-    BenchmarkHelper.set_benchmark_info("$(benchname)", "$(benchname)")
     for bm in BenchmarkHelper.benchmark_files()
         include(joinpath("benchmarks", bm))
     end
